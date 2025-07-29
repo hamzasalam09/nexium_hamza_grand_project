@@ -8,6 +8,7 @@
     "N8N_WEBHOOK_URL": "",
     "N8N_WEBHOOK_TEST_URL": "",
     "NEXT_PUBLIC_COHERE_API_KEY": "",
-    "ENABLE_DATABASE": ""
+    "ENABLE_DATABASE": "",
+    "NEXT_PUBLIC_SITE_URL": ""
   }
 } 

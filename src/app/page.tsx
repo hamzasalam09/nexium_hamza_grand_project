@@ -376,10 +376,21 @@ export default function Home() {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
 
+      // Determine the correct redirect URL based on the current domain
+      const currentOrigin = window.location.origin;
+      const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
+      const redirectUrl = isLocalhost 
+        ? `${currentOrigin}/api/auth/callback`
+        : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://nexium-hamza-grand-project.vercel.app'}/api/auth/callback`;
+      
+      console.log('Current origin:', currentOrigin);
+      console.log('Is localhost:', isLocalhost);
+      console.log('Redirect URL:', redirectUrl);
+
       const { error } = await supabase.auth.signInWithOtp({ 
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/api/auth/callback`
+          emailRedirectTo: redirectUrl
         }
       });
       if (error) {
