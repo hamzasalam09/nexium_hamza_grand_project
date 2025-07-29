@@ -2,6 +2,10 @@
 
 AI-powered web app to tailor your resume for specific job descriptions.
 
+## Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fhamzasalam09%2Fnexium_hamza_grand_project)
+
 ## Features
 - Magic Link Email Authentication (Supabase)
 - Upload resume (TXT/DOCX) & job description

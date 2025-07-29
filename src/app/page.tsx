@@ -376,7 +376,12 @@ export default function Home() {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
 
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/api/auth/callback`
+        }
+      });
       if (error) {
         console.error('Auth error:', error.message);
         // Show user-friendly error message
