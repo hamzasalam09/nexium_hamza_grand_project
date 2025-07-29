@@ -446,7 +446,7 @@ export default function Home() {
       const { error } = await tempSupabase.auth.signInWithOtp({ 
         email,
         options: {
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: isLocalhost ? `${currentOrigin}` : 'https://nexium-hamza-grand-project.vercel.app',
         }
       });
       if (error) {
