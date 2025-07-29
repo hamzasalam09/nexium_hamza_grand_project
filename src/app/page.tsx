@@ -20,10 +20,48 @@ export default function Home() {
   const [showFullscreen, setShowFullscreen] = useState(false);
 
   useEffect(() => {
+    const handleAuthCallback = async () => {
+      // Check if we have a code parameter from the auth callback
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const next = urlParams.get('next') || '/';
+      
+      if (code) {
+        console.log('Handling PKCE code exchange on client side...');
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('Client-side session exchange error:', error.message);
+            // Redirect to error page with the specific error
+            window.location.href = `/auth/auth-code-error?error=${encodeURIComponent(error.message)}`;
+            return;
+          }
+          
+          if (data?.session) {
+            console.log('Session exchange successful, user:', data.user?.email);
+            setUser(data.user);
+            
+            // Clean up the URL by removing the code parameter
+            const newUrl = new URL(window.location.href);
+            newUrl.searchParams.delete('code');
+            newUrl.searchParams.delete('next');
+            window.history.replaceState({}, '', newUrl.toString());
+          }
+        } catch (error) {
+          console.error('Error during client-side auth handling:', error);
+          window.location.href = `/auth/auth-code-error?error=${encodeURIComponent((error as Error).message)}`;
+        }
+      }
+    };
+    
     const getSession = async () => {
       const { data } = await supabase.auth.getUser();
       setUser(data.user);
     };
+    
+    // Handle auth callback first, then get existing session
+    handleAuthCallback();
     getSession();
     
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -390,16 +428,16 @@ export default function Home() {
       console.log('Redirect URL:', redirectUrl);
       console.log('Environment SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL);
 
-      // Create a completely fresh client with no cached settings
+      // Create a completely fresh client with explicit PKCE configuration
       const tempSupabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
           auth: {
             flowType: 'pkce',
-            autoRefreshToken: false, // Disable caching
-            detectSessionInUrl: false, // Disable URL detection
-            persistSession: false, // Don't persist to avoid conflicts
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            persistSession: true,
           },
         }
       );
@@ -409,11 +447,6 @@ export default function Home() {
         email,
         options: {
           emailRedirectTo: redirectUrl,
-          // Add extra data to force the redirect
-          data: {
-            redirect_url: redirectUrl,
-            site_url: isLocalhost ? currentOrigin : 'https://nexium-hamza-grand-project.vercel.app'
-          }
         }
       });
       if (error) {
