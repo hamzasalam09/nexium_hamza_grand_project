@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
 import { User } from '@supabase/supabase-js';
-import { PDFProcessor } from '@/utils/pdfProcessor';
 
 export default function Home() {
   const [email, setEmail] = useState('');
@@ -112,25 +111,53 @@ export default function Home() {
       // Detect different types of content
       if (
         trimmedLine.toUpperCase() === trimmedLine && 
+        trimmedLine.length < 80 && 
+        !trimmedLine.includes('@') &&
+        !trimmedLine.includes('(') &&
+        !trimmedLine.includes('|') &&
+        !trimmedLine.includes(':') &&
+        (trimmedLine.includes('EXPERIENCE') ||
+         trimmedLine.includes('EDUCATION') ||
+         trimmedLine.includes('SKILLS') ||
+         trimmedLine.includes('SUMMARY') ||
+         trimmedLine.includes('OBJECTIVE') ||
+         trimmedLine.includes('CERTIFICATION') ||
+         trimmedLine.includes('PROJECT') ||
+         trimmedLine.includes('CONTACT') ||
+         trimmedLine.includes('ACHIEVEMENT') ||
+         trimmedLine.includes('QUALIFICATION') ||
+         trimmedLine.includes('PROFESSIONAL') ||
+         trimmedLine.includes('TECHNICAL') ||
+         trimmedLine.includes('WORK') ||
+         trimmedLine.includes('CORE') ||
+         trimmedLine.includes('COMPETENCIES'))
+      ) {
+        // Main section headings (all caps, contains key resume sections)
+        formattedLines.push({ type: 'heading', content: trimmedLine, level: 1 });
+      } else if (
+        trimmedLine.toUpperCase() === trimmedLine && 
         trimmedLine.length < 50 && 
         !trimmedLine.includes('@') &&
         !trimmedLine.includes('(') &&
         !trimmedLine.includes('|')
       ) {
-        // Main headings (all caps, short)
+        // Other headings (all caps, short)
         formattedLines.push({ type: 'heading', content: trimmedLine, level: 1 });
       } else if (
         trimmedLine.endsWith(':') || 
         (trimmedLine.includes('|') && (trimmedLine.includes('20') || trimmedLine.includes('19'))) ||
-        (line.length < 80 && !line.startsWith('•') && !line.startsWith('-') && index > 0)
+        (line.length < 100 && !line.startsWith('•') && !line.startsWith('-') && index > 0 && 
+         (trimmedLine.includes('|') || trimmedLine.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/i)))
       ) {
-        // Subheadings (job titles, education, etc.)
+        // Subheadings (job titles, education entries, etc.)
         formattedLines.push({ type: 'subheading', content: trimmedLine, level: 2 });
       } else if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-')) {
         // Bullet points
         formattedLines.push({ type: 'bullet', content: trimmedLine.substring(1).trim() });
-      } else if (trimmedLine.includes('@') || trimmedLine.includes('(') || trimmedLine.includes('|')) {
-        // Contact info or dates
+      } else if (trimmedLine.includes('@') || 
+                 (trimmedLine.includes('(') && trimmedLine.includes(')')) ||
+                 trimmedLine.match(/^\d{3}[-.\s]?\d{3}[-.\s]?\d{4}$/)) {
+        // Contact info (email, phone, etc.)
         formattedLines.push({ type: 'contact', content: trimmedLine });
       } else {
         // Regular paragraph text
@@ -153,253 +180,6 @@ export default function Home() {
         reader.onload = (e) => resolve(e.target?.result as string);
         reader.onerror = () => reject(new Error('Failed to read text file'));
         reader.readAsText(file);
-      } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-        // Handle PDF files using the robust PDF processor
-        try {
-          const extractedText = await PDFProcessor.extractTextFromFile(file);
-          resolve(extractedText);
-        } catch (error) {
-          console.error('PDF processing error:', error);
-          reject(error);
-        }
-          
-          // Dynamic import of PDF.js
-          const pdfjsLib = await import('pdfjs-dist');
-          
-          // Configure worker with multiple fallback options
-          const configureWorker = () => {
-            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-              const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-              pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
-              console.log('PDF worker configured:', workerUrl);
-            }
-          };
-          
-          // Initialize worker
-          configureWorker();
-          
-          // Convert file to array buffer
-          const arrayBuffer = await file.arrayBuffer();
-          console.log('PDF file loaded, size:', arrayBuffer.byteLength);
-          
-          // Validate PDF file format
-          const uint8Array = new Uint8Array(arrayBuffer);
-          const header = Array.from(uint8Array.slice(0, 5))
-            .map(byte => String.fromCharCode(byte))
-            .join('');
-          
-          if (!header.startsWith('%PDF')) {
-            throw new Error('INVALID_PDF_FORMAT');
-          }
-          
-          console.log('PDF format validated');
-          
-          // Configure PDF.js with optimized settings and fallback worker
-          const configureWorkerSafely = () => {
-            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-              // Try multiple worker sources in order of preference
-              const workerSources = [
-                `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`,
-                `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`,
-                `/pdf.worker.min.js` // Local fallback
-              ];
-              
-              pdfjsLib.GlobalWorkerOptions.workerSrc = workerSources[0];
-              console.log('PDF worker configured:', pdfjsLib.GlobalWorkerOptions.workerSrc);
-            }
-          };
-          
-          configureWorkerSafely();
-          
-          const pdfConfig = {
-            data: arrayBuffer,
-            verbosity: 0, // Minimize console output
-            useSystemFonts: false,
-            disableFontFace: true,
-            isEvalSupported: false,
-            useWorkerFetch: false,
-            // Disable external resources that might cause CORS issues
-            cMapUrl: undefined,
-            standardFontDataUrl: undefined
-          };
-          
-          // Load PDF document with timeout and worker fallback
-          const timeoutMs = 20000; // 20 second timeout
-          
-          const loadPdfWithTimeout = async (retryCount = 0) => {
-            return new Promise<any>((resolve, reject) => {
-              const loadingTask = pdfjsLib.getDocument(pdfConfig);
-              
-              const timeoutId = setTimeout(() => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (loadingTask as any).destroy?.();
-                
-                // If this is the first failure and worker related, try local worker
-                if (retryCount === 0) {
-                  console.warn('PDF loading failed, trying local worker fallback...');
-                  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-                  
-                  // Retry with local worker
-                  setTimeout(() => {
-                    loadPdfWithTimeout(1).then(resolve).catch(reject);
-                  }, 1000);
-                } else {
-                  reject(new Error('PDF_LOAD_TIMEOUT'));
-                }
-              }, timeoutMs);
-              
-              loadingTask.promise
-                .then((pdf) => {
-                  clearTimeout(timeoutId);
-                  resolve(pdf);
-                })
-                .catch((error) => {
-                  clearTimeout(timeoutId);
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  (loadingTask as any).destroy?.();
-                  
-                  // If worker error and first attempt, try local worker
-                  if (retryCount === 0 && (error.message.includes('worker') || error.message.includes('fetch'))) {
-                    console.warn('PDF worker error, trying local worker fallback:', error.message);
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-                    
-                    setTimeout(() => {
-                      loadPdfWithTimeout(1).then(resolve).catch(reject);
-                    }, 1000);
-                  } else {
-                    reject(error);
-                  }
-                });
-            });
-          };
-          
-          const pdf = await loadPdfWithTimeout();
-          console.log('PDF loaded successfully, pages:', pdf.numPages);
-          
-          // Extract text from all pages
-          let fullText = '';
-          let processedPages = 0;
-          const maxPages = Math.min(pdf.numPages, 15); // Process up to 15 pages
-          
-          for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-            try {
-              console.log(`Processing page ${pageNum}...`);
-              
-              const page = await pdf.getPage(pageNum);
-              const textContent = await page.getTextContent();
-              
-              if (textContent?.items && textContent.items.length > 0) {
-                // Extract text items and handle positioning
-                const textItems = textContent.items
-                  .filter((item: any) => item?.str && typeof item.str === 'string')
-                  .map((item: any) => {
-                    // Clean and normalize text
-                    const text = item.str.trim().replace(/\s+/g, ' ');
-                    return {
-                      text: text,
-                      x: item.transform?.[4] || 0,
-                      y: item.transform?.[5] || 0,
-                      width: item.width || 0,
-                      height: item.height || 0
-                    };
-                  })
-                  .filter((item: any) => item.text.length > 0);
-                
-                if (textItems.length > 0) {
-                  // Sort by Y position (top to bottom) then X position (left to right)
-                  textItems.sort((a: any, b: any) => {
-                    const yDiff = Math.abs(a.y - b.y);
-                    if (yDiff < 5) { // Same line tolerance
-                      return a.x - b.x; // Sort by X position
-                    }
-                    return b.y - a.y; // Sort by Y position (descending)
-                  });
-                  
-                  // Join text with appropriate spacing
-                  let pageText = '';
-                  let lastY = null;
-                  
-                  for (let i = 0; i < textItems.length; i++) {
-                    const item = textItems[i];
-                    const currentY = Math.round(item.y);
-                    
-                    if (lastY !== null && Math.abs(currentY - lastY) > 5) {
-                      // New line detected
-                      pageText += '\n';
-                    } else if (pageText.length > 0 && !pageText.endsWith(' ') && !item.text.startsWith(' ')) {
-                      // Add space between words on same line
-                      pageText += ' ';
-                    }
-                    
-                    pageText += item.text;
-                    lastY = currentY;
-                  }
-                  
-                  if (pageText.trim()) {
-                    fullText += pageText.trim() + '\n\n';
-                    processedPages++;
-                  }
-                }
-              }
-              
-              // Clean up page resources
-              page.cleanup?.();
-              
-            } catch (pageError) {
-              console.warn(`Failed to process page ${pageNum}:`, pageError);
-              // Continue with next page
-            }
-          }
-          
-          // Clean up PDF resources
-          pdf.destroy?.();
-          
-          // Validate extracted text
-          const cleanText = fullText.trim().replace(/\n{3,}/g, '\n\n');
-          
-          if (!cleanText || cleanText.length < 10) {
-            throw new Error('NO_TEXT_EXTRACTED');
-          }
-          
-          console.log(`Successfully extracted text from ${processedPages}/${maxPages} pages (${cleanText.length} characters)`);
-          
-          resolve(cleanText);
-          
-        } catch (error) {
-          console.error('PDF processing failed:', error);
-          
-          const errorCode = (error as Error).message;
-          let userMessage = '';
-          
-          switch (errorCode) {
-            case 'INVALID_PDF_FORMAT':
-              userMessage = 'Invalid PDF file format. Please ensure you have selected a valid PDF document.';
-              break;
-            case 'PDF_LOAD_TIMEOUT':
-              userMessage = 'PDF processing timed out. The file may be too large or complex. Please try:\n\n• Converting to TXT format\n• Using a smaller PDF file\n• Splitting large documents into smaller files';
-              break;
-            case 'NO_TEXT_EXTRACTED':
-              userMessage = 'No readable text found in this PDF. This may be:\n\n• A scanned/image-based PDF\n• A password-protected document\n• A corrupted file\n\nPlease try converting to TXT or DOCX format first.';
-              break;
-            default:
-              if (errorCode.includes('worker') || errorCode.includes('fetch') || errorCode.includes('network')) {
-                userMessage = 'PDF processing service temporarily unavailable. Please try:\n\n• Refreshing the page and trying again\n• Converting PDF to TXT format\n• Using a different browser\n• Checking your internet connection';
-              } else if (errorCode.includes('password') || errorCode.includes('encrypted')) {
-                userMessage = 'This PDF is password-protected or encrypted. Please:\n\n• Remove password protection\n• Save as an unprotected PDF\n• Convert to TXT or DOCX format';
-              } else {
-                userMessage = `PDF processing failed: ${errorCode}\n\nPlease try:\n\n• Converting to TXT or DOCX format\n• Using a different PDF file\n• Ensuring the file is not corrupted`;
-              }
-          }
-          
-      } else if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
-        // Handle PDF files using the robust PDF processor
-        try {
-          const extractedText = await PDFProcessor.extractTextFromFile(file);
-          resolve(extractedText);
-        } catch (error) {
-          console.error('PDF processing error:', error);
-          reject(error);
-        }
       } else if (
         fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
         fileName.endsWith('.docx')
@@ -423,7 +203,7 @@ export default function Home() {
         // .doc files are more complex to parse, show helpful error
         reject(new Error('Legacy .doc files are not supported. Please save as .docx or convert to TXT format.'));
       } else {
-        reject(new Error('Unsupported file format. Please use TXT, PDF, or DOCX files.'));
+        reject(new Error('Unsupported file format. Please use TXT or DOCX files only.'));
       }
     });
   };
@@ -433,6 +213,7 @@ export default function Home() {
     setResumeFile(file);
     
     try {
+      console.log('Starting file upload processing for:', file.name, file.type, file.size);
       const extractedText = await extractTextFromFile(file);
       
       if (!extractedText.trim()) {
@@ -440,26 +221,18 @@ export default function Home() {
       }
       
       setResumeText(extractedText);
-      console.log('File processed successfully:', file.name);
+      console.log('File processed successfully:', file.name, 'Text length:', extractedText.length);
     } catch (error) {
       console.error('File processing error:', error);
       const errorMessage = (error as Error).message;
       
       // Show user-friendly error messages with specific guidance
-      if (errorMessage.includes('browser security restrictions') || errorMessage.includes('temporarily unavailable') || errorMessage.includes('timeout')) {
-        alert(`🔧 PDF Processing Issue\n\n${errorMessage}`);
-      } else if (errorMessage.includes('CORS') || errorMessage.includes('worker') || errorMessage.includes('Failed to fetch')) {
-        alert(`🔧 PDF Processing Configuration Issue\n\n${errorMessage}\n\nQuick fixes:\n• Try converting PDF to TXT format\n• Use a different browser\n• Ensure PDF contains selectable text`);
-      } else if (errorMessage.includes('scanned') || errorMessage.includes('image-based')) {
-        alert(`📄 Scanned PDF Detected\n\n${errorMessage}\n\nThis PDF appears to contain images rather than text. Please:\n• Use OCR software to convert to text\n• Save as TXT or DOCX format\n• Try a different, text-based PDF`);
-      } else if (errorMessage.includes('No text content') || errorMessage.includes('empty')) {
-        alert(`📝 Empty File Content\n\n${errorMessage}\n\nPlease ensure:\n• The file contains actual text\n• The file is not corrupted\n• You have the correct file format`);
-      } else if (errorMessage.includes('password') || errorMessage.includes('protected') || errorMessage.includes('encrypted')) {
-        alert(`🔒 Protected Document\n\n${errorMessage}\n\nPlease:\n• Remove password protection\n• Save as an unprotected PDF\n• Convert to TXT or DOCX format`);
-      } else if (errorMessage.includes('Invalid PDF') || errorMessage.includes('format')) {
-        alert(`❌ Invalid File Format\n\n${errorMessage}\n\nPlease ensure:\n• The file is a valid PDF, DOCX, or TXT file\n• The file is not corrupted\n• Try re-saving or re-exporting the file`);
+      if (errorMessage.includes('No text content') || errorMessage.includes('empty') || errorMessage.includes('No text extracted')) {
+        alert(`📝 Empty File Content\n\n${errorMessage}\n\nPlease ensure:\n• The file contains actual text\n• The file is not corrupted\n• You have the correct file format\n• Try converting to TXT format`);
+      } else if (errorMessage.includes('Invalid') || errorMessage.includes('format') || errorMessage.includes('Unsupported')) {
+        alert(`❌ Invalid File Format\n\n${errorMessage}\n\nSupported formats:\n• TXT (plain text)\n• DOCX (Microsoft Word)`);
       } else {
-        alert(`⚠️ File Processing Error\n\n${errorMessage}\n\nGeneral troubleshooting:\n• Try a different file format (TXT, PDF, DOCX)\n• Ensure the file contains readable text\n• Check that the file is not corrupted`);
+        alert(`⚠️ File Processing Error\n\n${errorMessage}\n\nGeneral troubleshooting:\n• Try refreshing the page\n• Ensure the file contains readable text\n• Check that the file is not corrupted\n• Convert to TXT format if needed`);
       }
       
       setResumeFile(null);
@@ -471,242 +244,61 @@ export default function Home() {
 
   // Download functions
   const downloadAsTxt = () => {
+    // Format the resume for better plain text readability
+    const formattedItems = formatResumeForDisplay(tailoredResume);
+    
+    const plainTextContent = formattedItems.map(item => {
+      switch (item.type) {
+        case 'heading':
+          return `\n${item.content}\n${'='.repeat(item.content.length)}\n`;
+        case 'subheading':
+          return `\n${item.content}\n${'-'.repeat(Math.min(item.content.length, 50))}\n`;
+        case 'bullet':
+          return `• ${item.content}`;
+        case 'contact':
+          return item.content;
+        case 'paragraph':
+          return `\n${item.content}\n`;
+        default:
+          return item.content;
+      }
+    }).join('\n').replace(/\n{3,}/g, '\n\n');
+    
     const element = document.createElement('a');
-    const file = new Blob([tailoredResume], { type: 'text/plain' });
+    const file = new Blob([plainTextContent], { type: 'text/plain' });
     element.href = URL.createObjectURL(file);
-    element.download = `${jobTitle || 'tailored-resume'}.txt`;
+    element.download = `${(jobTitle || 'professional-resume').replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.txt`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
   };
 
-  const downloadAsPdf = () => {
-    // Create a highly professional PDF layout
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      const formattedContent = formatResumeForDisplay(tailoredResume);
-      let htmlContent = '';
-      
-      formattedContent.forEach(item => {
-        switch (item.type) {
-          case 'heading':
-            htmlContent += `
-              <div style="text-align: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 3px solid #2563eb;">
-                <h1 style="font-size: 28px; font-weight: bold; color: #1a202c; margin: 0; text-transform: uppercase; letter-spacing: 2px; font-family: 'Arial', sans-serif;">
-                  ${item.content}
-                </h1>
-              </div>`;
-            break;
-          case 'subheading':
-            htmlContent += `
-              <div style="margin-top: 25px; margin-bottom: 15px;">
-                <h2 style="font-size: 16px; font-weight: bold; color: #2563eb; margin: 0; padding: 8px 0 8px 15px; background: linear-gradient(90deg, #e0f2fe 0%, transparent 100%); border-left: 4px solid #2563eb; font-family: 'Arial', sans-serif;">
-                  ${item.content}
-                </h2>
-              </div>`;
-            break;
-          case 'bullet':
-            htmlContent += `
-              <div style="margin-left: 25px; margin-bottom: 8px; display: flex; align-items: flex-start;">
-                <span style="color: #2563eb; font-weight: bold; margin-right: 10px; font-size: 14px; margin-top: 2px;">•</span>
-                <span style="color: #374151; line-height: 1.6; font-size: 14px; font-family: 'Arial', sans-serif;">
-                  ${item.content}
-                </span>
-              </div>`;
-            break;
-          case 'contact':
-            htmlContent += `
-              <div style="text-align: center; margin-bottom: 8px;">
-                <p style="color: #6b7280; margin: 0; font-size: 12px; font-family: 'Arial', sans-serif;">
-                  ${item.content}
-                </p>
-              </div>`;
-            break;
-          case 'paragraph':
-            htmlContent += `
-              <p style="color: #374151; margin-bottom: 12px; line-height: 1.7; font-size: 14px; text-align: justify; font-family: 'Arial', sans-serif;">
-                ${item.content}
-              </p>`;
-            break;
-          default:
-            htmlContent += `
-              <p style="color: #374151; margin-bottom: 8px; font-size: 14px; font-family: 'Arial', sans-serif;">
-                ${item.content}
-              </p>`;
-        }
-      });
-
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>${jobTitle || 'Professional Resume'}</title>
-            <style>
-              @page {
-                margin: 0.75in;
-                size: letter;
-              }
-              
-              @media print {
-                body { 
-                  font-family: 'Times New Roman', 'Arial', serif; 
-                  margin: 0; 
-                  line-height: 1.4; 
-                  color: #000;
-                  font-size: 12px;
-                  background: white;
-                }
-                
-                h1, h2 { 
-                  page-break-after: avoid; 
-                  color: #000 !important;
-                }
-                
-                div, p { 
-                  page-break-inside: avoid; 
-                }
-                
-                .no-print { display: none; }
-                
-                /* Ensure colors print properly */
-                * {
-                  -webkit-print-color-adjust: exact;
-                  color-adjust: exact;
-                }
-              }
-              
-              body { 
-                font-family: 'Times New Roman', 'Arial', serif; 
-                margin: 0;
-                padding: 20px;
-                line-height: 1.5; 
-                color: #000;
-                max-width: 8.5in;
-                background: white;
-                box-shadow: 0 0 20px rgba(0,0,0,0.1);
-              }
-              
-              .header {
-                text-align: center;
-                margin-bottom: 30px;
-                padding: 20px 0;
-                background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-                border-radius: 8px;
-              }
-              
-              .content {
-                max-width: 100%;
-                margin: 0 auto;
-              }
-              
-              .print-button {
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: #2563eb;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                cursor: pointer;
-                font-size: 14px;
-                font-weight: bold;
-                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-                z-index: 1000;
-              }
-              
-              .print-button:hover {
-                background: #1d4ed8;
-                transform: translateY(-2px);
-                transition: all 0.2s ease;
-              }
-            </style>
-          </head>
-          <body>
-            <button class="print-button no-print" onclick="window.print()">🖨️ Print Resume</button>
-            
-            <div class="content">
-              <div class="header">
-                <div style="color: #64748b; font-size: 12px; margin-bottom: 5px;">PROFESSIONAL RESUME</div>
-                <div style="color: #2563eb; font-size: 14px; font-weight: bold;">${jobTitle || 'AI-Tailored Resume'}</div>
-              </div>
-              
-              ${htmlContent}
-              
-              <div style="margin-top: 40px; text-align: center; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                <p style="font-size: 10px; color: #9ca3af; margin: 0;">
-                  Generated by NEXIUM AI Resume Tailor • ${new Date().toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `);
-      
-      printWindow.document.close();
-      printWindow.focus();
-      
-      // Auto-print after a short delay
-      setTimeout(() => {
-        printWindow.print();
-      }, 500);
-    }
-  };
-
   const downloadAsWord = () => {
-    // Create a highly professional Word-compatible document
-    const formattedContent = formatResumeForDisplay(tailoredResume);
-    let htmlContent = '';
+    // Format the content to match the exact preview styling
+    const formattedItems = formatResumeForDisplay(tailoredResume);
     
-    formattedContent.forEach(item => {
+    const htmlContent = formattedItems.map(item => {
       switch (item.type) {
         case 'heading':
-          htmlContent += `
-            <div style="text-align: center; margin-bottom: 24pt; padding-bottom: 12pt; border-bottom: 3pt solid #2563eb;">
-              <h1 style="font-size: 22pt; font-weight: bold; color: #1a202c; margin: 0; text-transform: uppercase; letter-spacing: 2pt; font-family: 'Calibri', 'Arial', sans-serif;">
-                ${item.content}
-              </h1>
-            </div>`;
-          break;
+          // Match: text-2xl font-bold text-gray-900 mb-4 pb-2 border-b-2 border-gray-300 uppercase tracking-wide
+          return `<h1 style="font-size: 16pt; font-weight: bold; color: #111827; margin: 0 0 16pt 0; padding-bottom: 8pt; border-bottom: 2pt solid #d1d5db; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'Calibri', sans-serif;">${item.content}</h1>`;
         case 'subheading':
-          htmlContent += `
-            <div style="margin-top: 18pt; margin-bottom: 12pt;">
-              <h2 style="font-size: 14pt; font-weight: bold; color: #2563eb; margin: 0; padding: 6pt 0 6pt 12pt; background-color: #e0f2fe; border-left: 4pt solid #2563eb; font-family: 'Calibri', 'Arial', sans-serif;">
-                ${item.content}
-              </h2>
-            </div>`;
-          break;
+          // Match: text-lg font-semibold text-gray-800 mb-2 mt-4
+          return `<h2 style="font-size: 14pt; font-weight: 600; color: #1f2937; margin: 16pt 0 8pt 0; font-family: 'Calibri', sans-serif;">${item.content}</h2>`;
         case 'bullet':
-          htmlContent += `
-            <p style="margin-left: 24pt; margin-bottom: 6pt; text-indent: -12pt; line-height: 1.4;">
-              <span style="color: #2563eb; font-weight: bold; font-size: 12pt;">• </span>
-              <span style="color: #374151; font-size: 11pt; font-family: 'Calibri', 'Arial', sans-serif;">
-                ${item.content}
-              </span>
-            </p>`;
-          break;
+          // Match: flex items-start mb-1 ml-4, text-blue-600 mr-2 mt-1.5, text-gray-700 leading-relaxed
+          return `<p style="margin: 4pt 0 4pt 16pt; text-indent: -8pt; color: #374151; font-size: 11pt; line-height: 1.5; font-family: 'Calibri', sans-serif;"><span style="color: #2563eb; font-weight: bold;">• </span>${item.content}</p>`;
         case 'contact':
-          htmlContent += `
-            <div style="text-align: center; margin-bottom: 6pt;">
-              <p style="color: #6b7280; margin: 0; font-size: 10pt; font-family: 'Calibri', 'Arial', sans-serif;">
-                ${item.content}
-              </p>
-            </div>`;
-          break;
+          // Match: text-gray-600 mb-1 text-sm
+          return `<p style="margin: 4pt 0; color: #4b5563; font-size: 10pt; font-family: 'Calibri', sans-serif;">${item.content}</p>`;
         case 'paragraph':
-          htmlContent += `
-            <p style="color: #374151; margin-bottom: 10pt; line-height: 1.5; font-size: 11pt; text-align: justify; font-family: 'Calibri', 'Arial', sans-serif;">
-              ${item.content}
-            </p>`;
-          break;
+          // Match: text-gray-700 mb-2 leading-relaxed
+          return `<p style="margin: 8pt 0; color: #374151; font-size: 11pt; line-height: 1.5; font-family: 'Calibri', sans-serif;">${item.content}</p>`;
         default:
-          htmlContent += `
-            <p style="color: #374151; margin-bottom: 6pt; font-size: 11pt; font-family: 'Calibri', 'Arial', sans-serif;">
-              ${item.content}
-            </p>`;
+          // Match: text-gray-700 mb-1
+          return `<p style="margin: 4pt 0; color: #374151; font-size: 11pt; font-family: 'Calibri', sans-serif;">${item.content}</p>`;
       }
-    });
+    }).join('\n');
 
     const content = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' 
@@ -715,92 +307,43 @@ export default function Home() {
         <head>
           <meta charset='utf-8'>
           <title>${jobTitle || 'Professional Resume'}</title>
-          <!--[if gte mso 9]>
-          <xml>
-            <w:WordDocument>
-              <w:View>Print</w:View>
-              <w:Zoom>100</w:Zoom>
-              <w:DoNotPromptForConvert/>
-              <w:DoNotShowInsertionsAndDeletions/>
-              <w:DontDisplayPageBoundaries/>
-            </w:WordDocument>
-          </xml>
-          <![endif]-->
           <style>
             @page {
-              margin: 1in;
               size: 8.5in 11in;
+              margin: 1in 1in 1in 1in;
             }
-            
             body { 
-              font-family: 'Calibri', 'Arial', sans-serif; 
+              font-family: 'Calibri', sans-serif; 
               font-size: 11pt; 
-              line-height: 1.3; 
-              color: #000000;
+              line-height: 1.5; 
               margin: 0;
-              background-color: white;
+              padding: 24pt;
+              color: #374151;
+              background-color: #ffffff;
+              width: 100%;
             }
-            
             h1, h2, h3 { 
-              page-break-after: avoid; 
-              margin-top: 12pt;
-              margin-bottom: 6pt;
-            }
-            
-            p { 
               margin-top: 0; 
-              margin-bottom: 6pt;
-              page-break-inside: avoid;
+              font-family: 'Calibri', sans-serif; 
             }
-            
-            .header-section {
-              text-align: center;
-              margin-bottom: 24pt;
-              padding: 18pt;
-              background-color: #f8fafc;
-              border: 1pt solid #e2e8f0;
-              border-radius: 6pt;
+            p {
+              margin: 0;
+              font-family: 'Calibri', sans-serif;
             }
-            
-            .section-divider {
-              border-top: 1pt solid #d1d5db;
-              margin: 18pt 0;
-              padding-top: 12pt;
+            /* Ensure consistent spacing and colors that match the preview */
+            * {
+              box-sizing: border-box;
             }
-            
-            .footer {
-              margin-top: 36pt;
-              text-align: center;
-              padding-top: 12pt;
-              border-top: 1pt solid #e5e7eb;
-              font-size: 9pt;
-              color: #9ca3af;
-            }
-            
-            /* Ensure proper spacing and formatting */
-            .content-section {
-              margin-bottom: 18pt;
+            /* Remove any default margins for consistent layout */
+            html, body {
+              margin: 0;
+              padding: 0;
             }
           </style>
         </head>
         <body>
-          <div class="header-section">
-            <p style="color: #64748b; font-size: 10pt; margin-bottom: 6pt; font-weight: normal;">
-              PROFESSIONAL RESUME
-            </p>
-            <p style="color: #2563eb; font-size: 12pt; font-weight: bold; margin: 0;">
-              ${jobTitle || 'AI-Tailored Resume'}
-            </p>
-          </div>
-          
-          <div class="content-section">
+          <div style="background-color: #ffffff; padding: 24pt; min-height: 100%; border-radius: 8pt; box-shadow: 0 1pt 3pt rgba(0,0,0,0.1);">
             ${htmlContent}
-          </div>
-          
-          <div class="footer">
-            <p style="margin: 0;">
-              Generated by NEXIUM AI Resume Tailor • ${new Date().toLocaleDateString()}
-            </p>
           </div>
         </body>
       </html>
@@ -812,7 +355,7 @@ export default function Home() {
     
     const element = document.createElement('a');
     element.href = URL.createObjectURL(blob);
-    element.download = `${(jobTitle || 'professional-resume').replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase()}.doc`;
+    element.download = `${(jobTitle || 'professional-resume').replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.doc`;
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
@@ -1121,7 +664,7 @@ export default function Home() {
                   }`}>
                     <input
                       type="file"
-                      accept=".pdf,.docx,.txt"
+                      accept=".docx,.txt"
                       className="hidden"
                       id="resume-upload"
                       onChange={(e) => {
@@ -1153,10 +696,9 @@ export default function Home() {
                           <div className="text-sm text-gray-500 mb-3">Drag & drop or click to browse</div>
                           <div className="flex justify-center gap-2 text-xs text-gray-600">
                             <span className="bg-gray-700 px-2 py-1 rounded">TXT</span>
-                            <span className="bg-gray-700 px-2 py-1 rounded">PDF</span>
                             <span className="bg-gray-700 px-2 py-1 rounded">DOCX</span>
                           </div>
-                          <div className="text-xs text-gray-500 mt-2">Note: .doc files not supported, please use .docx</div>
+                          <div className="text-xs text-gray-500 mt-2">Supported formats: .docx and .txt files</div>
                         </div>
                       )}
                     </label>
@@ -1425,7 +967,7 @@ export default function Home() {
               {/* Download Options */}
               <div className="bg-gray-800/50 p-6 rounded-lg">
                 <h3 className="text-lg font-bold mb-4 text-yellow-400">💾 Download Options</h3>
-                <div className="grid md:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-2 gap-4">
                   <button
                     onClick={() => downloadAsTxt()}
                     className="cyber-btn-primary p-4 text-center"
@@ -1436,21 +978,12 @@ export default function Home() {
                   </button>
                   
                   <button
-                    onClick={() => downloadAsPdf()}
-                    className="cyber-btn-secondary p-4 text-center"
-                  >
-                    <div className="text-2xl mb-2">📋</div>
-                    <div className="font-bold">Download as PDF</div>
-                    <div className="text-xs opacity-80">Professional format</div>
-                  </button>
-                  
-                  <button
                     onClick={() => downloadAsWord()}
                     className="cyber-btn-danger p-4 text-center"
                   >
                     <div className="text-2xl mb-2">📝</div>
                     <div className="font-bold">Download as Word</div>
-                    <div className="text-xs opacity-80">Editable document</div>
+                    <div className="text-xs opacity-80">Matches preview formatting</div>
                   </button>
                 </div>
               </div>
@@ -1551,15 +1084,6 @@ export default function Home() {
                 className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
               >
                 📄 Download TXT
-              </button>
-              <button
-                onClick={() => {
-                  setShowFullscreen(false);
-                  downloadAsPdf();
-                }}
-                className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
-              >
-                📋 Download PDF
               </button>
               <button
                 onClick={() => {

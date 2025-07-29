@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   webpack: (config) => {
-    // Handle PDF.js worker files
+    // Handle canvas issues with mammoth
     config.resolve.alias = {
       ...config.resolve.alias,
       canvas: false,
@@ -10,9 +10,6 @@ const nextConfig: NextConfig = {
     
     return config;
   },
-  
-  // Allow external packages for PDF.js
-  serverExternalPackages: ['pdfjs-dist'],
 };
 
 export default nextConfig;

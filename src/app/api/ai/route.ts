@@ -11,18 +11,22 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Try N8N webhook first
+    // Try N8N webhook first with better error handling
     const webhookUrl = process.env.N8N_WEBHOOK_URL;
     
     if (webhookUrl) {
       try {
         console.log('Attempting N8N webhook:', webhookUrl);
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
         const response = await fetch(webhookUrl, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'User-Agent': 'NEXIUM-Resume-Tailor/1.0'
+            'User-Agent': 'NEXIUM-Resume-Tailor/1.0',
+            'Accept': 'application/json'
           },
           body: JSON.stringify({ 
             resume, 
@@ -30,20 +34,32 @@ export async function POST(req: NextRequest) {
             jobTitle: jobTitle || 'Position',
             timestamp: new Date().toISOString()
           }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         if (response.ok) {
           const data = await response.json();
+          console.log('N8N webhook successful');
           return NextResponse.json({ 
             success: true, 
             tailoredResume: data.tailoredResume || data.aiResume || data.result || data 
           });
         } else {
           console.warn(`N8N webhook failed with status: ${response.status}`);
+          const errorText = await response.text();
+          console.warn('N8N webhook error response:', errorText);
         }
       } catch (error) {
-        console.warn('N8N webhook error:', error);
+        if ((error as Error).name === 'AbortError') {
+          console.warn('N8N webhook timeout');
+        } else {
+          console.warn('N8N webhook error:', (error as Error).message);
+        }
       }
+    } else {
+      console.log('N8N webhook URL not configured, using OpenAI fallback');
     }
 
     // Fallback to OpenAI API
@@ -58,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     console.log('Using OpenAI fallback for resume tailoring');
 
-    const prompt = `You are an expert resume tailoring assistant. Please tailor the following resume for the specific job position.
+    const prompt = `You are an expert resume tailoring assistant. Please tailor the following resume for the specific job position with proper formatting and clear headings.
 
 Job Title: ${jobTitle || 'Position'}
 
@@ -69,13 +85,41 @@ Original Resume:
 ${resume}
 
 Instructions:
-1. Tailor the resume to match the job requirements
-2. Highlight relevant skills and experience
-3. Use keywords from the job description
-4. Maintain the original format and structure
-5. Keep all factual information accurate
-6. Make the resume more compelling for this specific role
-7. IMPORTANT: Return ONLY the tailored resume content. Do not include any commentary, advice, or explanatory text.
+1. Format the resume with clear section headings (use ALL CAPS for main sections)
+2. Include these standard sections with proper headings:
+   - CONTACT INFORMATION (name, phone, email, location)
+   - PROFESSIONAL SUMMARY or OBJECTIVE
+   - WORK EXPERIENCE or PROFESSIONAL EXPERIENCE
+   - EDUCATION
+   - SKILLS (Technical Skills, Core Competencies, etc.)
+   - CERTIFICATIONS (if applicable)
+   - PROJECTS (if applicable)
+3. Tailor the content to match the job requirements
+4. Highlight relevant skills and experience
+5. Use keywords from the job description
+6. Keep all factual information accurate
+7. Make the resume more compelling for this specific role
+8. Use bullet points (•) for experience items and skills
+9. Format dates consistently (Month Year - Month Year)
+10. IMPORTANT: Return ONLY the tailored resume content with proper headings. Do not include any commentary, advice, or explanatory text.
+
+Format Example:
+[NAME]
+[Contact Information]
+
+PROFESSIONAL SUMMARY
+[Summary paragraph]
+
+WORK EXPERIENCE
+[Company] | [Title] | [Dates]
+• [Achievement/responsibility]
+• [Achievement/responsibility]
+
+EDUCATION
+[Degree] | [School] | [Year]
+
+SKILLS
+• [Skill category]: [Skills list]
 
 Tailored Resume:`;
 
@@ -90,14 +134,14 @@ Tailored Resume:`;
         messages: [
           {
             role: 'system',
-            content: 'You are a professional resume writer. Return only the tailored resume content without any commentary, advice, or explanatory text. Do not include phrases like "This resume focuses on" or "Good luck with your application" or any other guidance.'
+            content: 'You are a professional resume writer. Format resumes with clear section headings in ALL CAPS, use bullet points for lists, and maintain professional formatting. Return only the tailored resume content without any commentary, advice, or explanatory text. Use consistent formatting throughout.'
           },
           {
             role: 'user',
             content: prompt
           }
         ],
-        max_tokens: 2000,
+        max_tokens: 3000,
         temperature: 0.7,
       }),
     });
@@ -113,7 +157,7 @@ Tailored Resume:`;
       throw new Error('No response received from AI service');
     }
 
-    // Clean up any AI-generated commentary or advice
+    // Clean up any AI-generated commentary or advice and format headings
     tailoredResume = tailoredResume
       .split('\n')
       .filter((line: string) => {
@@ -134,7 +178,42 @@ Tailored Resume:`;
                !lowerLine.startsWith('tip:') &&
                line.trim() !== '';
       })
+      .map((line: string) => {
+        // Format common section headings consistently
+        const trimmedLine = line.trim();
+        if (trimmedLine.length > 0) {
+          // Check if line appears to be a section heading (standalone line with no bullet points or colons at the end)
+          const isHeading = trimmedLine.length < 50 && 
+                           !trimmedLine.includes('•') && 
+                           !trimmedLine.includes('|') &&
+                           !trimmedLine.includes('@') &&
+                           !trimmedLine.includes('(') &&
+                           !trimmedLine.includes(')') &&
+                           !trimmedLine.endsWith(':') &&
+                           (trimmedLine.toLowerCase().includes('experience') ||
+                            trimmedLine.toLowerCase().includes('education') ||
+                            trimmedLine.toLowerCase().includes('skills') ||
+                            trimmedLine.toLowerCase().includes('summary') ||
+                            trimmedLine.toLowerCase().includes('objective') ||
+                            trimmedLine.toLowerCase().includes('certification') ||
+                            trimmedLine.toLowerCase().includes('project') ||
+                            trimmedLine.toLowerCase().includes('contact') ||
+                            trimmedLine.toLowerCase().includes('achievement') ||
+                            trimmedLine.toLowerCase().includes('qualification'));
+          
+          if (isHeading) {
+            return trimmedLine.toUpperCase();
+          }
+        }
+        return line;
+      })
       .join('\n')
+      .trim();
+
+    // Add extra formatting for better structure
+    tailoredResume = tailoredResume
+      .replace(/\n([A-Z\s]+)\n/g, '\n\n$1\n')  // Add space before/after headings
+      .replace(/\n{3,}/g, '\n\n')  // Remove excessive line breaks
       .trim();
 
     return NextResponse.json({ 
