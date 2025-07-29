@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
-import { User } from '@supabase/supabase-js';
+import { User, createClient } from '@supabase/supabase-js';
 
 export default function Home() {
   const [email, setEmail] = useState('');
@@ -376,21 +376,44 @@ export default function Home() {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
 
-      // Determine the correct redirect URL based on the current domain
+      // Try multiple approaches to ensure we get the production URL
       const currentOrigin = window.location.origin;
       const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
-      const redirectUrl = isLocalhost 
-        ? `${currentOrigin}/api/auth/callback`
-        : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://nexium-hamza-grand-project.vercel.app'}/api/auth/callback`;
+      
+      // Always use production URL when not on localhost
+      let redirectUrl;
+      if (isLocalhost) {
+        redirectUrl = `${currentOrigin}/api/auth/callback`;
+      } else {
+        redirectUrl = 'https://nexium-hamza-grand-project.vercel.app/api/auth/callback';
+      }
       
       console.log('Current origin:', currentOrigin);
       console.log('Is localhost:', isLocalhost);
       console.log('Redirect URL:', redirectUrl);
+      console.log('Environment SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL);
 
-      const { error } = await supabase.auth.signInWithOtp({ 
+      // Try creating a fresh client with explicit configuration
+      const authClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          auth: {
+            flowType: 'pkce',
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            persistSession: true,
+          },
+        }
+      );
+
+      const { error } = await authClient.auth.signInWithOtp({ 
         email,
         options: {
-          emailRedirectTo: redirectUrl
+          emailRedirectTo: redirectUrl,
+          data: {
+            redirect_to: redirectUrl // Extra parameter to ensure it's used
+          }
         }
       });
       if (error) {

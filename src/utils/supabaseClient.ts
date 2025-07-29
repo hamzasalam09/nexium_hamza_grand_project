@@ -14,4 +14,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     persistSession: true,
   },
-}); 
+});
+
+// Create a client specifically for auth operations that forces production URLs
+export const createAuthClient = () => {
+  const isLocalhost = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      flowType: 'pkce',
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  });
+}; 
