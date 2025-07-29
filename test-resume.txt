@@ -1,0 +1,31 @@
+JOHN SMITH
+Software Engineer
+
+Email: john.smith@email.com
+Phone: (555) 123-4567
+Location: San Francisco, CA
+
+EXPERIENCE
+
+Senior Software Engineer | TechCorp Inc | 2021 - Present
+• Developed scalable web applications using React and Node.js
+• Led a team of 5 developers on multiple projects
+• Implemented CI/CD pipelines reducing deployment time by 50%
+• Collaborated with cross-functional teams to deliver features
+
+Software Engineer | StartupXYZ | 2019 - 2021
+• Built and maintained RESTful APIs using Python and Django
+• Optimized database queries improving performance by 30%
+• Participated in code reviews and mentored junior developers
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of California, Berkeley | 2015 - 2019
+
+SKILLS
+
+Programming Languages: JavaScript, Python, Java, TypeScript
+Frameworks: React, Node.js, Django, Express
+Databases: PostgreSQL, MongoDB, Redis
+Tools: Git, Docker, AWS, Jenkins
