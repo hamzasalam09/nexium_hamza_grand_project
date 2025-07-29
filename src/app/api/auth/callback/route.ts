@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/utils/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/';
 
   if (code) {
+    // Create a fresh client to handle the session exchange
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host'); // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === 'development';
-      
-      if (isLocalEnv) {
-        // in development, redirect to localhost
-        return NextResponse.redirect(`${origin}${next}`);
-      } else if (forwardedHost) {
-        // in production, redirect to the forwarded host
-        return NextResponse.redirect(`https://${forwardedHost}${next}`);
-      } else {
-        // fallback to current origin
-        return NextResponse.redirect(`${origin}${next}`);
-      }
+      // Always redirect to production domain for magic links
+      const productionUrl = 'https://nexium-hamza-grand-project.vercel.app';
+      return NextResponse.redirect(`${productionUrl}${next}`);
     }
   }
 
   // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  return NextResponse.redirect('https://nexium-hamza-grand-project.vercel.app/auth/auth-code-error');
 } 

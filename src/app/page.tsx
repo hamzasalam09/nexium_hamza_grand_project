@@ -376,43 +376,43 @@ export default function Home() {
         throw new Error('Supabase configuration is missing. Please check your environment variables.');
       }
 
-      // Try multiple approaches to ensure we get the production URL
+      // FORCE production URL - completely bypass Supabase Site URL setting
       const currentOrigin = window.location.origin;
       const isLocalhost = currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1');
       
-      // Always use production URL when not on localhost
-      let redirectUrl;
-      if (isLocalhost) {
-        redirectUrl = `${currentOrigin}/api/auth/callback`;
-      } else {
-        redirectUrl = 'https://nexium-hamza-grand-project.vercel.app/api/auth/callback';
-      }
+      // For production, ALWAYS use the production domain
+      const redirectUrl = isLocalhost 
+        ? `${currentOrigin}/api/auth/callback`
+        : 'https://nexium-hamza-grand-project.vercel.app/api/auth/callback';
       
       console.log('Current origin:', currentOrigin);
       console.log('Is localhost:', isLocalhost);
       console.log('Redirect URL:', redirectUrl);
       console.log('Environment SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL);
 
-      // Try creating a fresh client with explicit configuration
-      const authClient = createClient(
+      // Create a completely fresh client with no cached settings
+      const tempSupabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
           auth: {
             flowType: 'pkce',
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            persistSession: true,
+            autoRefreshToken: false, // Disable caching
+            detectSessionInUrl: false, // Disable URL detection
+            persistSession: false, // Don't persist to avoid conflicts
           },
         }
       );
 
-      const { error } = await authClient.auth.signInWithOtp({ 
+      // Send magic link with explicit redirect URL
+      const { error } = await tempSupabase.auth.signInWithOtp({ 
         email,
         options: {
           emailRedirectTo: redirectUrl,
+          // Add extra data to force the redirect
           data: {
-            redirect_to: redirectUrl // Extra parameter to ensure it's used
+            redirect_url: redirectUrl,
+            site_url: isLocalhost ? currentOrigin : 'https://nexium-hamza-grand-project.vercel.app'
           }
         }
       });
