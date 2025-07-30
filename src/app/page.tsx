@@ -19,7 +19,7 @@ export default function Home() {
   const [tailoringLoading, setTailoringLoading] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<Record<string, any> | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -31,14 +31,23 @@ export default function Home() {
       
       if (code) {
         console.log('Handling PKCE code exchange on client side...', { code: code.substring(0, 10) + '...' });
+        
         try {
-          // Clear any existing session first to prevent conflicts
-          await supabase.auth.signOut();
+          // Check if we have the code verifier stored
+          const codeVerifier = localStorage.getItem('pkce_code_verifier') || sessionStorage.getItem('pkce_code_verifier');
+          console.log('Code verifier available:', !!codeVerifier);
           
+          // Don't clear existing session - let PKCE handle it properly
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           
           if (error) {
             console.error('Client-side session exchange error:', error);
+            console.error('Error details:', { 
+              code: error.code, 
+              message: error.message,
+              status: error.status 
+            });
+            
             // Redirect to error page with the specific error
             window.location.href = `/auth/auth-code-error?error=${encodeURIComponent(error.message)}`;
             return;
@@ -481,22 +490,11 @@ export default function Home() {
       console.log('Redirect URL:', redirectUrl);
       console.log('Environment SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL);
 
-      // Create a completely fresh client with explicit PKCE configuration
-      const tempSupabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-          auth: {
-            flowType: 'pkce',
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            persistSession: true,
-          },
-        }
-      );
-
+      // Use the existing supabase client to maintain PKCE state consistency
+      console.log('Initiating PKCE magic link flow...');
+      
       // Send magic link with redirect directly to main page (no callback route)
-      const { error } = await tempSupabase.auth.signInWithOtp({ 
+      const { error } = await supabase.auth.signInWithOtp({ 
         email,
         options: {
           emailRedirectTo: isLocalhost ? `${currentOrigin}` : 'https://nexium-hamza-grand-project.vercel.app',
