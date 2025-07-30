@@ -18,8 +18,6 @@ export default function Home() {
   const [tailoredResume, setTailoredResume] = useState('');
   const [tailoringLoading, setTailoringLoading] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -86,55 +84,6 @@ export default function Home() {
       listener.subscription.unsubscribe();
     };
   }, []);
-
-  // Debug function to check environment and auth status
-  const handleDebug = async () => {
-    try {
-      // Try to fetch debug data from API, but don't fail if it's protected
-      let debugData = null;
-      try {
-        const debugResponse = await fetch('/api/debug');
-        if (debugResponse.ok) {
-          debugData = await debugResponse.json();
-        } else {
-          debugData = { api_debug_error: `API returned ${debugResponse.status}: ${debugResponse.statusText}` };
-        }
-      } catch (apiError) {
-        debugData = { api_debug_error: (apiError as Error).message };
-      }
-      
-      const sessionResponse = await supabase.auth.getSession();
-      const sessionData = sessionResponse.data;
-      
-      const urlParams = new URLSearchParams(window.location.search);
-      
-      // Check client-side environment variables
-      const clientEnv = {
-        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'NOT SET',
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ')' : 'NOT SET',
-        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'NOT SET',
-        NEXT_PUBLIC_COHERE_API_KEY: process.env.NEXT_PUBLIC_COHERE_API_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_COHERE_API_KEY.length + ')' : 'NOT SET',
-        NODE_ENV: process.env.NODE_ENV || 'NOT SET',
-        // Server-side vars won't be available here
-        server_side_note: 'Server-side env vars (OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY) are not accessible on client-side for security'
-      };
-      
-      setDebugInfo({
-        client_environment: clientEnv,
-        api_debug: debugData,
-        session: sessionData,
-        url: window.location.href,
-        urlParams: Object.fromEntries(urlParams.entries()),
-        user: user,
-        timestamp: new Date().toISOString()
-      });
-      setShowDebug(true);
-    } catch (error) {
-      console.error('Debug error:', error);
-      setDebugInfo({ error: (error as Error).message });
-      setShowDebug(true);
-    }
-  };
 
   // Handle resume tailoring
   const handleTailorResume = async () => {
@@ -633,12 +582,6 @@ export default function Home() {
                       className="text-cyan-400 hover:text-cyan-300 transition-colors"
                     >
                       View Dashboard →
-                    </button>
-                    <button
-                      onClick={handleDebug}
-                      className="text-yellow-400 hover:text-yellow-300 transition-colors text-sm"
-                    >
-                      🔧 Debug
                     </button>
                   </div>
                   <button
@@ -1225,44 +1168,6 @@ export default function Home() {
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
               >
                 📝 Download Word
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Debug Modal */}
-      {showDebug && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-cyan-400/50 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto cyber-card">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-cyan-400">🔧 Debug Information</h3>
-              <button
-                onClick={() => setShowDebug(false)}
-                className="text-gray-400 hover:text-white text-2xl"
-              >
-                ×
-              </button>
-            </div>
-            <div className="space-y-4">
-              {debugInfo && (
-                <pre className="bg-gray-800 p-4 rounded-lg text-sm text-green-400 overflow-auto whitespace-pre-wrap">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-              )}
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))}
-                className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-sm"
-              >
-                📋 Copy to Clipboard
-              </button>
-              <button
-                onClick={handleDebug}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm"
-              >
-                🔄 Refresh Debug Info
               </button>
             </div>
           </div>

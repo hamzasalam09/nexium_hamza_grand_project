@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEnvConfig, debugEnvironment } from '@/utils/config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,14 +11,8 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Get configuration with enhanced environment variable access
-    const config = getEnvConfig();
-    const envDebug = debugEnvironment();
-    
-    console.log('Environment debugging:', envDebug);
-
     // Try N8N webhook first with better error handling
-    const webhookUrl = config.N8N_WEBHOOK_URL;
+    const webhookUrl = process.env.N8N_WEBHOOK_URL;
     
     if (webhookUrl) {
       try {
@@ -70,23 +63,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback to OpenAI API
-    const openaiApiKey = config.OPENAI_API_KEY;
-    
-    // Debug environment variable access
-    console.log('Environment check:', {
-      OPENAI_API_KEY_exists: !!openaiApiKey,
-      OPENAI_API_KEY_type: typeof openaiApiKey,
-      OPENAI_API_KEY_length: openaiApiKey?.length || 0,
-      OPENAI_API_KEY_empty: openaiApiKey === '',
-      all_env_keys_count: Object.keys(process.env).length,
-      openai_related_keys: Object.keys(process.env).filter(key => key.includes('OPENAI'))
-    });
+    const openaiApiKey = process.env.OPENAI_API_KEY;
     
     if (!openaiApiKey || openaiApiKey.trim() === '') {
       console.error('OpenAI API key not found or empty');
       return NextResponse.json({ 
         success: false, 
-        error: `AI service not configured. API key status: ${!openaiApiKey ? 'missing' : 'empty'}. Environment has ${Object.keys(process.env).length} keys.` 
+        error: 'AI service not configured. Please check your API configuration.' 
       }, { status: 500 });
     }
 
