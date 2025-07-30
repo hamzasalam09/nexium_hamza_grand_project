@@ -90,18 +90,38 @@ export default function Home() {
   // Debug function to check environment and auth status
   const handleDebug = async () => {
     try {
-      const [debugResponse, sessionResponse] = await Promise.all([
-        fetch('/api/debug'),
-        supabase.auth.getSession()
-      ]);
+      // Try to fetch debug data from API, but don't fail if it's protected
+      let debugData = null;
+      try {
+        const debugResponse = await fetch('/api/debug');
+        if (debugResponse.ok) {
+          debugData = await debugResponse.json();
+        } else {
+          debugData = { api_debug_error: `API returned ${debugResponse.status}: ${debugResponse.statusText}` };
+        }
+      } catch (apiError) {
+        debugData = { api_debug_error: (apiError as Error).message };
+      }
       
-      const debugData = await debugResponse.json();
+      const sessionResponse = await supabase.auth.getSession();
       const sessionData = sessionResponse.data;
       
       const urlParams = new URLSearchParams(window.location.search);
       
+      // Check client-side environment variables
+      const clientEnv = {
+        NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || 'NOT SET',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ')' : 'NOT SET',
+        NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'NOT SET',
+        NEXT_PUBLIC_COHERE_API_KEY: process.env.NEXT_PUBLIC_COHERE_API_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_COHERE_API_KEY.length + ')' : 'NOT SET',
+        NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+        // Server-side vars won't be available here
+        server_side_note: 'Server-side env vars (OPENAI_API_KEY, SUPABASE_SERVICE_ROLE_KEY) are not accessible on client-side for security'
+      };
+      
       setDebugInfo({
-        environment: debugData,
+        client_environment: clientEnv,
+        api_debug: debugData,
         session: sessionData,
         url: window.location.href,
         urlParams: Object.fromEntries(urlParams.entries()),
