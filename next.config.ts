@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL,
     MONGODB_URI: process.env.MONGODB_URI,
+    ENABLE_DATABASE: process.env.ENABLE_DATABASE,
   },
   webpack: (config) => {
     // Handle canvas issues with mammoth
