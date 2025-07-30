@@ -11,8 +11,25 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
+    // Force runtime environment variable loading
+    const runtimeEnv = {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+      N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL,
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV
+    };
+    
+    console.log('Runtime environment check:', {
+      keys_available: Object.keys(runtimeEnv).map(key => ({ 
+        key, 
+        has_value: !!runtimeEnv[key as keyof typeof runtimeEnv],
+        length: runtimeEnv[key as keyof typeof runtimeEnv]?.length || 0 
+      })),
+      total_process_env_keys: Object.keys(process.env).length
+    });
+
     // Try N8N webhook first with better error handling
-    const webhookUrl = process.env.N8N_WEBHOOK_URL;
+    const webhookUrl = runtimeEnv.N8N_WEBHOOK_URL;
     
     if (webhookUrl) {
       try {
@@ -63,12 +80,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback to OpenAI API
-    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = runtimeEnv.OPENAI_API_KEY;
     
-    if (!openaiApiKey) {
+    // Debug environment variable access
+    console.log('Environment check:', {
+      OPENAI_API_KEY_exists: !!openaiApiKey,
+      OPENAI_API_KEY_type: typeof openaiApiKey,
+      OPENAI_API_KEY_length: openaiApiKey?.length || 0,
+      OPENAI_API_KEY_empty: openaiApiKey === '',
+      all_env_keys_count: Object.keys(process.env).length,
+      openai_related_keys: Object.keys(process.env).filter(key => key.includes('OPENAI'))
+    });
+    
+    if (!openaiApiKey || openaiApiKey.trim() === '') {
+      console.error('OpenAI API key not found or empty');
       return NextResponse.json({ 
         success: false, 
-        error: 'AI service not configured. Please check your API configuration.' 
+        error: `AI service not configured. API key status: ${!openaiApiKey ? 'missing' : 'empty'}. Environment has ${Object.keys(process.env).length} keys.` 
       }, { status: 500 });
     }
 
