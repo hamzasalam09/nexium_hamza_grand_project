@@ -442,7 +442,7 @@ export default function Home() {
         }
       );
 
-      // Send magic link with explicit redirect URL
+      // Send magic link with redirect directly to main page (no callback route)
       const { error } = await tempSupabase.auth.signInWithOtp({ 
         email,
         options: {
