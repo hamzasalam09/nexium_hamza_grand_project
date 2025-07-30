@@ -18,27 +18,33 @@ export default function Home() {
   const [tailoredResume, setTailoredResume] = useState('');
   const [tailoringLoading, setTailoringLoading] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const handleAuthCallback = async () => {
       // Check if we have a code parameter from the auth callback
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
-      const next = urlParams.get('next') || '/';
       
       if (code) {
-        console.log('Handling PKCE code exchange on client side...');
+        console.log('Handling PKCE code exchange on client side...', { code: code.substring(0, 10) + '...' });
         try {
+          // Clear any existing session first to prevent conflicts
+          await supabase.auth.signOut();
+          
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           
           if (error) {
-            console.error('Client-side session exchange error:', error.message);
+            console.error('Client-side session exchange error:', error);
             // Redirect to error page with the specific error
             window.location.href = `/auth/auth-code-error?error=${encodeURIComponent(error.message)}`;
             return;
           }
           
-          if (data?.session) {
+          if (data?.session && isMounted) {
             console.log('Session exchange successful, user:', data.user?.email);
             setUser(data.user);
             
@@ -47,31 +53,78 @@ export default function Home() {
             newUrl.searchParams.delete('code');
             newUrl.searchParams.delete('next');
             window.history.replaceState({}, '', newUrl.toString());
+            
+            // Force a small delay to ensure state is updated
+            setTimeout(() => {
+              if (isMounted) {
+                console.log('Auth callback complete, session established');
+              }
+            }, 100);
           }
         } catch (error) {
           console.error('Error during client-side auth handling:', error);
           window.location.href = `/auth/auth-code-error?error=${encodeURIComponent((error as Error).message)}`;
         }
+      } else {
+        // No code parameter, try to get existing session
+        const getSession = async () => {
+          try {
+            const { data } = await supabase.auth.getUser();
+            if (isMounted) {
+              setUser(data.user);
+            }
+          } catch (error) {
+            console.error('Error getting existing session:', error);
+          }
+        };
+        
+        getSession();
       }
     };
     
-    const getSession = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
-    };
-    
-    // Handle auth callback first, then get existing session
     handleAuthCallback();
-    getSession();
     
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth state change:', event, session?.user?.email);
+      if (isMounted) {
+        setUser(session?.user ?? null);
+      }
     });
     
     return () => {
+      isMounted = false;
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  // Debug function to check environment and auth status
+  const handleDebug = async () => {
+    try {
+      const [debugResponse, sessionResponse] = await Promise.all([
+        fetch('/api/debug'),
+        supabase.auth.getSession()
+      ]);
+      
+      const debugData = await debugResponse.json();
+      const sessionData = sessionResponse.data;
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      setDebugInfo({
+        environment: debugData,
+        session: sessionData,
+        url: window.location.href,
+        urlParams: Object.fromEntries(urlParams.entries()),
+        user: user,
+        timestamp: new Date().toISOString()
+      });
+      setShowDebug(true);
+    } catch (error) {
+      console.error('Debug error:', error);
+      setDebugInfo({ error: (error as Error).message });
+      setShowDebug(true);
+    }
+  };
 
   // Handle resume tailoring
   const handleTailorResume = async () => {
@@ -575,12 +628,20 @@ export default function Home() {
                 </div>
                 
                 <div className="mt-8 pt-6 border-t border-gray-700 flex justify-between items-center">
-                  <button
-                    onClick={() => window.location.href = '/dashboard'}
-                    className="text-cyan-400 hover:text-cyan-300 transition-colors"
-                  >
-                    View Dashboard →
-                  </button>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={() => window.location.href = '/dashboard'}
+                      className="text-cyan-400 hover:text-cyan-300 transition-colors"
+                    >
+                      View Dashboard →
+                    </button>
+                    <button
+                      onClick={handleDebug}
+                      className="text-yellow-400 hover:text-yellow-300 transition-colors text-sm"
+                    >
+                      🔧 Debug
+                    </button>
+                  </div>
                   <button
                     onClick={() => supabase.auth.signOut()}
                     className="text-gray-400 hover:text-gray-300 transition-colors text-sm"
@@ -1165,6 +1226,44 @@ export default function Home() {
                 className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg flex items-center gap-2"
               >
                 📝 Download Word
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Modal */}
+      {showDebug && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-cyan-400/50 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-auto cyber-card">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-cyan-400">🔧 Debug Information</h3>
+              <button
+                onClick={() => setShowDebug(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="space-y-4">
+              {debugInfo && (
+                <pre className="bg-gray-800 p-4 rounded-lg text-sm text-green-400 overflow-auto whitespace-pre-wrap">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              )}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))}
+                className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                📋 Copy to Clipboard
+              </button>
+              <button
+                onClick={handleDebug}
+                className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                🔄 Refresh Debug Info
               </button>
             </div>
           </div>
