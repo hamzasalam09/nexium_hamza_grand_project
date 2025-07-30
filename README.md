@@ -12,7 +12,7 @@ AI-powered web app to tailor your resume for specific job descriptions.
 - AI tailoring via n8n + OpenAI
 - Live editable preview
 - Download tailored resume as Word document
-- Save resumes to MongoDB (optional)
+- Save resumes to MongoDB
 - User dashboard for past resumes
 - Deployed on Vercel (CI/CD)
 
