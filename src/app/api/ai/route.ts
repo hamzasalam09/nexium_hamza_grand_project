@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getEnvConfig, debugEnvironment } from '@/utils/config';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,25 +12,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Force runtime environment variable loading
-    const runtimeEnv = {
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-      N8N_WEBHOOK_URL: process.env.N8N_WEBHOOK_URL,
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL_ENV: process.env.VERCEL_ENV
-    };
+    // Get configuration with enhanced environment variable access
+    const config = getEnvConfig();
+    const envDebug = debugEnvironment();
     
-    console.log('Runtime environment check:', {
-      keys_available: Object.keys(runtimeEnv).map(key => ({ 
-        key, 
-        has_value: !!runtimeEnv[key as keyof typeof runtimeEnv],
-        length: runtimeEnv[key as keyof typeof runtimeEnv]?.length || 0 
-      })),
-      total_process_env_keys: Object.keys(process.env).length
-    });
+    console.log('Environment debugging:', envDebug);
 
     // Try N8N webhook first with better error handling
-    const webhookUrl = runtimeEnv.N8N_WEBHOOK_URL;
+    const webhookUrl = config.N8N_WEBHOOK_URL;
     
     if (webhookUrl) {
       try {
@@ -80,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fallback to OpenAI API
-    const openaiApiKey = runtimeEnv.OPENAI_API_KEY;
+    const openaiApiKey = config.OPENAI_API_KEY;
     
     // Debug environment variable access
     console.log('Environment check:', {
