@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
-import { User, createClient } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 
 export default function Home() {
   const [email, setEmail] = useState('');
@@ -19,7 +19,7 @@ export default function Home() {
   const [tailoringLoading, setTailoringLoading] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<Record<string, any> | null>(null);
+  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     let isMounted = true;
