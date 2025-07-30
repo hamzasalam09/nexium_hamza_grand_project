@@ -25,6 +25,18 @@ export async function GET(request: NextRequest) {
       key.includes('OPENAI') || key.includes('SUPABASE_SERVICE') || key.includes('MONGODB')
     ),
     all_env_keys_count: Object.keys(process.env).length,
+    // Check the actual string values
+    raw_values: {
+      OPENAI_API_KEY: typeof process.env.OPENAI_API_KEY,
+      SUPABASE_SERVICE_ROLE_KEY: typeof process.env.SUPABASE_SERVICE_ROLE_KEY,
+      MONGODB_URI: typeof process.env.MONGODB_URI,
+    },
+    // Check if they're empty strings
+    empty_string_check: {
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY === '',
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY === '',
+      MONGODB_URI: process.env.MONGODB_URI === '',
+    }
   };
 
   // Additional debugging info
@@ -39,14 +51,14 @@ export async function GET(request: NextRequest) {
       'x-vercel-deployment-url': request.headers.get('x-vercel-deployment-url'),
     },
     testResults,
-    // Show actual values (first few chars) for debugging - only if they exist
+    // Show actual values (first few chars) for debugging - only if they exist and aren't empty
     actualValues: {
-      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? 
-        `${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}...` : 'NOT SET',
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 
-        `${process.env.OPENAI_API_KEY.substring(0, 15)}...` : 'NOT SET',
-      MONGODB_URI: process.env.MONGODB_URI ? 
-        `${process.env.MONGODB_URI.substring(0, 25)}...` : 'NOT SET',
+      SUPABASE_SERVICE_ROLE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY.length > 0) ? 
+        `${process.env.SUPABASE_SERVICE_ROLE_KEY.substring(0, 20)}... (length: ${process.env.SUPABASE_SERVICE_ROLE_KEY.length})` : `NOT SET (${typeof process.env.SUPABASE_SERVICE_ROLE_KEY})`,
+      OPENAI_API_KEY: (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.length > 0) ? 
+        `${process.env.OPENAI_API_KEY.substring(0, 15)}... (length: ${process.env.OPENAI_API_KEY.length})` : `NOT SET (${typeof process.env.OPENAI_API_KEY})`,
+      MONGODB_URI: (process.env.MONGODB_URI && process.env.MONGODB_URI.length > 0) ? 
+        `${process.env.MONGODB_URI.substring(0, 25)}... (length: ${process.env.MONGODB_URI.length})` : `NOT SET (${typeof process.env.MONGODB_URI})`,
     }
   };
 
