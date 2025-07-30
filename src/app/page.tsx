@@ -24,75 +24,56 @@ export default function Home() {
   useEffect(() => {
     let isMounted = true;
 
-    const handleAuthCallback = async () => {
-      // Check if we have a code parameter from the auth callback
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
-      
-      if (code) {
-        console.log('Handling PKCE code exchange on client side...', { code: code.substring(0, 10) + '...' });
+    const handleAuth = async () => {
+      try {
+        // First, let Supabase handle the URL automatically
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
-        try {
-          // Check if we have the code verifier stored
-          const codeVerifier = localStorage.getItem('pkce_code_verifier') || sessionStorage.getItem('pkce_code_verifier');
-          console.log('Code verifier available:', !!codeVerifier);
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+        } else if (sessionData.session) {
+          console.log('Session found:', sessionData.session.user.email);
+          if (isMounted) {
+            setUser(sessionData.session.user);
+          }
+        }
+
+        // Check if we have URL parameters that need handling
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        
+        if (code) {
+          console.log('PKCE code detected, attempting session exchange...');
           
-          // Don't clear existing session - let PKCE handle it properly
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          // Try to exchange the code for a session
+          const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           
-          if (error) {
-            console.error('Client-side session exchange error:', error);
-            console.error('Error details:', { 
-              code: error.code, 
-              message: error.message,
-              status: error.status 
-            });
-            
-            // Redirect to error page with the specific error
-            window.location.href = `/auth/auth-code-error?error=${encodeURIComponent(error.message)}`;
+          if (exchangeError) {
+            console.error('PKCE exchange error:', exchangeError);
+            // Redirect to error page
+            window.location.href = `/auth/auth-code-error?error=${encodeURIComponent(exchangeError.message)}`;
             return;
           }
           
-          if (data?.session && isMounted) {
-            console.log('Session exchange successful, user:', data.user?.email);
-            setUser(data.user);
-            
-            // Clean up the URL by removing the code parameter
-            const newUrl = new URL(window.location.href);
-            newUrl.searchParams.delete('code');
-            newUrl.searchParams.delete('next');
-            window.history.replaceState({}, '', newUrl.toString());
-            
-            // Force a small delay to ensure state is updated
-            setTimeout(() => {
-              if (isMounted) {
-                console.log('Auth callback complete, session established');
-              }
-            }, 100);
+          if (exchangeData?.session && isMounted) {
+            console.log('PKCE exchange successful:', exchangeData.session.user.email);
+            setUser(exchangeData.session.user);
           }
-        } catch (error) {
-          console.error('Error during client-side auth handling:', error);
-          window.location.href = `/auth/auth-code-error?error=${encodeURIComponent((error as Error).message)}`;
+          
+          // Clean up URL
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('code');
+          newUrl.searchParams.delete('next');
+          window.history.replaceState({}, '', newUrl.toString());
         }
-      } else {
-        // No code parameter, try to get existing session
-        const getSession = async () => {
-          try {
-            const { data } = await supabase.auth.getUser();
-            if (isMounted) {
-              setUser(data.user);
-            }
-          } catch (error) {
-            console.error('Error getting existing session:', error);
-          }
-        };
-        
-        getSession();
+      } catch (error) {
+        console.error('Auth handling error:', error);
       }
     };
+
+    handleAuth();
     
-    handleAuthCallback();
-    
+    // Set up auth state listener
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth state change:', event, session?.user?.email);
       if (isMounted) {
